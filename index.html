@@ -414,16 +414,30 @@ select.form-input{cursor:pointer}
         </div>
       </div>
       <div class="form-row">
-        <label class="form-label">締切日</label>
-        <input class="form-input" id="f-task-due" type="date">
-      </div>
-      <div class="form-row">
         <label class="form-label">繰り返し</label>
-        <select class="form-input" id="f-task-repeat">
+        <select class="form-input" id="f-task-repeat" onchange="onRepeatChange(this.value)">
           <option value="none">なし</option>
           <option value="daily">毎日</option>
           <option value="weekly">毎週（同じ曜日）</option>
         </select>
+      </div>
+      <!-- 繰り返しなし: 締切日のみ -->
+      <div class="form-row" id="f-row-due">
+        <label class="form-label">締切日</label>
+        <input class="form-input" id="f-task-due" type="date">
+      </div>
+      <!-- 繰り返しあり: 開始日・終了日 -->
+      <div id="f-row-repeat-dates" style="display:none">
+        <div class="form-row-2">
+          <div>
+            <label class="form-label">繰り返し開始日 <span style="color:var(--red)">*</span></label>
+            <input class="form-input" id="f-task-rstart" type="date">
+          </div>
+          <div>
+            <label class="form-label">繰り返し終了日（任意）</label>
+            <input class="form-input" id="f-task-rend" type="date">
+          </div>
+        </div>
       </div>
       <div class="form-row">
         <label class="form-label">メモ</label>
@@ -436,10 +450,6 @@ select.form-input{cursor:pointer}
       <div class="form-row">
         <label class="form-label">イベント名</label>
         <input class="form-input" id="f-ev-title" type="text" placeholder="イベント名を入力">
-      </div>
-      <div class="form-row">
-        <label class="form-label">日付</label>
-        <input class="form-input" id="f-ev-date" type="date">
       </div>
       <div class="form-row-2">
         <div>
@@ -454,7 +464,7 @@ select.form-input{cursor:pointer}
       <div class="form-row-2">
         <div>
           <label class="form-label">繰り返し</label>
-          <select class="form-input" id="f-ev-repeat">
+          <select class="form-input" id="f-ev-repeat" onchange="onEvRepeatChange(this.value)">
             <option value="">なし</option>
             <option value="weekly">毎週</option>
           </select>
@@ -464,6 +474,24 @@ select.form-input{cursor:pointer}
           <select class="form-input" id="f-ev-cat">
             <option>講義</option><option>研究</option><option>締切</option><option>発表</option><option>その他</option>
           </select>
+        </div>
+      </div>
+      <!-- 繰り返しなし -->
+      <div class="form-row" id="f-ev-row-date">
+        <label class="form-label">日付</label>
+        <input class="form-input" id="f-ev-date" type="date">
+      </div>
+      <!-- 繰り返しあり -->
+      <div id="f-ev-row-repeat-dates" style="display:none">
+        <div class="form-row-2">
+          <div>
+            <label class="form-label">繰り返し開始日 <span style="color:var(--red)">*</span></label>
+            <input class="form-input" id="f-ev-rstart" type="date">
+          </div>
+          <div>
+            <label class="form-label">繰り返し終了日（任意）</label>
+            <input class="form-input" id="f-ev-rend" type="date">
+          </div>
         </div>
       </div>
     </div>
@@ -641,6 +669,13 @@ function openModal(){
   document.getElementById('f-ev-title').value='';
   document.getElementById('f-proj-name').value='';
   document.getElementById('f-task-repeat').value='none';
+  document.getElementById('f-task-rstart').value='';
+  document.getElementById('f-task-rend').value='';
+  onRepeatChange('none');
+  // イベントフォームリセット
+  if(document.getElementById('f-ev-rstart')) document.getElementById('f-ev-rstart').value='';
+  if(document.getElementById('f-ev-rend'))   document.getElementById('f-ev-rend').value='';
+  onEvRepeatChange('');
   // プロジェクト選択肢を動的生成
   const sel = document.getElementById('f-task-proj');
   sel.innerHTML = '<option value="">未設定</option>' +
@@ -649,6 +684,18 @@ function openModal(){
   setTimeout(()=>document.getElementById('f-task-title').focus(), 50);
 }
 function closeModal(){document.getElementById('modal').classList.remove('open')}
+
+function onRepeatChange(val){
+  const isRepeat = val !== 'none';
+  document.getElementById('f-row-due').style.display          = isRepeat ? 'none'  : 'block';
+  document.getElementById('f-row-repeat-dates').style.display = isRepeat ? 'block' : 'none';
+}
+
+function onEvRepeatChange(val){
+  const isRepeat = val !== '';
+  document.getElementById('f-ev-row-date').style.display          = isRepeat ? 'none'  : 'block';
+  document.getElementById('f-ev-row-repeat-dates').style.display  = isRepeat ? 'block' : 'none';
+}
 
 function setModalType(t, btn){
   modalType = t;
@@ -661,18 +708,32 @@ function setModalType(t, btn){
 
 function saveNew(){
   if(modalType==='task'){
-    const title = document.getElementById('f-task-title').value.trim();
+    const title  = document.getElementById('f-task-title').value.trim();
     if(!title){alert('タイトルを入力してください');return;}
-    const due    = document.getElementById('f-task-due').value;
     const prio   = document.getElementById('f-task-prio').value;
     const repeat = document.getElementById('f-task-repeat').value||'none';
     const memo   = document.getElementById('f-task-memo').value.trim();
-    // プロジェクト: addTaskTargetProjId優先、次にselectのvalue(ID)、なければ先頭
+
+    let due = '', repeatStart = null, repeatEnd = null;
+    if(repeat === 'none'){
+      due = document.getElementById('f-task-due').value;
+    } else {
+      repeatStart = document.getElementById('f-task-rstart').value;
+      repeatEnd   = document.getElementById('f-task-rend').value || null;
+      if(!repeatStart){ alert('繰り返し開始日を入力してください'); return; }
+      if(repeatEnd && repeatEnd < repeatStart){ alert('終了日は開始日より後にしてください'); return; }
+      due = repeatStart; // due は開始日として使う（互換性維持）
+    }
+
     let targetPid = addTaskTargetProjId || document.getElementById('f-task-proj').value || (PROJECTS[0]||{}).id;
     if(targetPid){
       const proj = PROJECTS.find(p=>p.id===targetPid);
       if(proj){
-        proj.tasks.push({id:'t'+Date.now(), title, prio, due, memo, done:false, repeat, skipDates:[], doneOccurrences:[], endDate:null});
+        proj.tasks.push({
+          id:'t'+Date.now(), title, prio, due,
+          repeatStart, repeatEnd,
+          memo, done:false, repeat, skipDates:[], doneOccurrences:[], endDate:repeatEnd||null
+        });
         addTaskTargetProjId = null;
         renderAll();
       }
@@ -681,23 +742,32 @@ function saveNew(){
       return;
     }
   } else if(modalType==='event'){
-    const title = document.getElementById('f-ev-title').value.trim();
-    const date  = document.getElementById('f-ev-date').value;
-    const start = document.getElementById('f-ev-start').value;
-    const end   = document.getElementById('f-ev-end').value;
-    const repeat= document.getElementById('f-ev-repeat').value;
-    const cat   = document.getElementById('f-ev-cat').value;
-    if(!title){alert('イベント名を入力してください');return;}
-    if(!date) {alert('日付を入力してください');return;}
+    const title  = document.getElementById('f-ev-title').value.trim();
+    const tStart = document.getElementById('f-ev-start').value;
+    const tEnd   = document.getElementById('f-ev-end').value;
+    const repeat = document.getElementById('f-ev-repeat').value;
+    const cat    = document.getElementById('f-ev-cat').value;
+    if(!title){ alert('イベント名を入力してください'); return; }
     const toH = s=>{ const [h,m]=s.split(':'); return parseInt(h)+parseInt(m)/60; };
     if(repeat==='weekly'){
-      const dow = new Date(date).getDay();
-      RECURRING.push({id:'r'+Date.now(),dow,start:toH(start),end:toH(end),title,cat,isRec:true});
+      const rstart = document.getElementById('f-ev-rstart').value;
+      const rend   = document.getElementById('f-ev-rend').value || null;
+      if(!rstart){ alert('繰り返し開始日を入力してください'); return; }
+      const dow = new Date(rstart).getDay();
+      RECURRING.push({
+        id:'r'+Date.now(), dow,
+        start:toH(tStart), end:toH(tEnd),
+        title, cat, isRec:true,
+        repeatStart:rstart, endDate:rend, skipDates:[]
+      });
     } else {
-      ONCE.push({id:'o'+Date.now(),date,start:toH(start),end:toH(end),title,cat,isRec:false});
+      const date = document.getElementById('f-ev-date').value;
+      if(!date){ alert('日付を入力してください'); return; }
+      ONCE.push({id:'o'+Date.now(), date, start:toH(tStart), end:toH(tEnd), title, cat, isRec:false});
     }
+    saveData();
     refreshCalView();
-    renderDashboard(); // カレンダーイベント追加後もダッシュボードのアラート更新
+    renderDashboard();
   } else {
     const name = document.getElementById('f-proj-name').value.trim();
     if(!name){alert('プロジェクト名を入力してください');return;}
@@ -917,30 +987,41 @@ function projMetaHtml(proj){
 function addDays(dateStr, n){
   const d=new Date(dateStr); d.setDate(d.getDate()+n); return fmtDate(d);
 }
-// 繰り返しタスクの出現日リストを返す（startDate から 28日分）
+
+function parseDate(str){
+  if(!str) return null;
+  const d = new Date(str); d.setHours(0,0,0,0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// 繰り返しタスクの出現日リストを返す
+// 開始日: task.repeatStart > task.due > 今日 の順でフォールバック
+// 終了日: task.repeatEnd > task.endDate の順でフォールバック（なければ無期限）
 function expandRepeats(task){
   if(!task.repeat || task.repeat==='none') return null;
-  const today   = new Date(); today.setHours(0,0,0,0);
-  // ウィンドウ: 今日-7日 〜 今日+REPEAT_WINDOW日（開始日が未来でもOK）
+
+  const today    = new Date(); today.setHours(0,0,0,0);
   const winStart = new Date(today); winStart.setDate(today.getDate()-7);
   const winEnd   = new Date(today); winEnd.setDate(today.getDate()+REPEAT_WINDOW);
-  const startDate= new Date(task.due); startDate.setHours(0,0,0,0);
-  const endDate  = task.endDate ? new Date(task.endDate) : null;
-  const skipSet  = new Set(task.skipDates||[]);
 
-  const dates = [];
-  // 開始日からウィンドウ終端まで走査（開始日がウィンドウより後ならそこから）
+  // 開始日を決定（フォールバック付き）
+  const startDate = parseDate(task.repeatStart) || parseDate(task.due) || new Date(today);
+
+  // 終了日を決定（なければ null = 無期限）
+  const endDate = parseDate(task.repeatEnd) || parseDate(task.endDate) || null;
+
+  const skipSet = new Set(task.skipDates||[]);
+  const dates   = [];
+
   let cur = new Date(startDate);
   let limit = 0;
-  while(cur <= winEnd && limit < 500){
+  while(cur <= winEnd && limit < 1000){
     limit++;
-    // endDateを超えたら終了
     if(endDate && cur > endDate) break;
-    // ウィンドウ内 & スキップでなければ追加
     if(cur >= winStart && !skipSet.has(fmtDate(cur))){
       dates.push(fmtDate(cur));
     }
-    if(task.repeat==='daily')  cur.setDate(cur.getDate()+1);
+    if(task.repeat==='daily')       cur.setDate(cur.getDate()+1);
     else if(task.repeat==='weekly') cur.setDate(cur.getDate()+7);
     else break;
   }
@@ -1718,12 +1799,15 @@ function deleteCalEvent(src, evId, mode, dateStr){
 // ============================================================
 function getEventsForDayFiltered(date){
   const ds = fmtDate(date), dow = date.getDay();
-  const today = new Date(); today.setHours(0,0,0,0);
   return [
     ...RECURRING.filter(e=>{
       if(e.dow!==dow) return false;
-      if(e.skipDates && e.skipDates.includes(ds)) return false;
-      if(e.endDate && new Date(e.endDate) < date) return false;
+      const skip = new Set(e.skipDates||[]);
+      if(skip.has(ds)) return false;
+      // repeatStart があればその日以降のみ表示
+      if(e.repeatStart && date < new Date(e.repeatStart)) return false;
+      const ed = parseDate(e.endDate);
+      if(ed && date > ed) return false;
       return true;
     }).map(e=>({...e,isRec:true})),
     ...ONCE.filter(e=>e.date===ds).map(e=>({...e,isRec:false}))
