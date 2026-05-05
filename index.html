@@ -285,9 +285,14 @@ select.form-input{cursor:pointer}
             </div>
           </div>
 
+          <div class="section-title" style="margin-top:24px;margin-bottom:12px">カレンダーイベントの管理</div>
+          <div id="settings-cal-list" style="margin-bottom:8px"></div>
+          <button class="btn btn-primary" style="margin-top:4px;margin-bottom:4px" onclick="openModal();setModalType('event',document.querySelectorAll('.mtype-tab')[1])">＋ イベントを追加</button>
+
           <div class="section-title" style="margin-top:24px;margin-bottom:12px">データ管理</div>
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
             <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('完了済みタスクをすべて削除しますか？')){clearDoneTasks();renderAll();renderSettings();}">🗑 完了済みタスクをすべて削除</button>
+            <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('カレンダーのイベントをすべて削除しますか？')){RECURRING=[];ONCE=[];refreshCalView();renderSettings();}">🗑 カレンダーイベントをすべて削除</button>
             <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('全データをリセットしますか？この操作は元に戻せません。')){resetAll();}">⚠ すべてのデータをリセット</button>
           </div>
         </div>
@@ -543,11 +548,7 @@ function isToday(d){const t=new Date();return d.getFullYear()===t.getFullYear()&
 function clr(cat){return CAT_COLORS[cat]||CAT_COLORS['その他']}
 
 function getEventsForDay(date){
-  const ds=fmtDate(date), dow=date.getDay();
-  return [
-    ...RECURRING.filter(e=>e.dow===dow).map(e=>({...e,isRec:true})),
-    ...ONCE.filter(e=>e.date===ds).map(e=>({...e,isRec:false}))
-  ];
+  return getEventsForDayFiltered(date);
 }
 
 // ===== PAGE NAV =====
@@ -725,7 +726,10 @@ function renderDay(){
     const ht=Math.max((ev.end-ev.start)*HOUR_H-3,20);
     const w=numCols>1?`calc(${100/numCols}% - 6px)`:'calc(100% - 8px)';
     const l=numCols>1?`calc(${ev._col*100/numCols}% + 4px)`:'4px';
-    eh+=`<div class="ev-block" style="top:${top}px;height:${ht}px;left:${l};width:${w};background:${c.bg};color:${c.text}">
+    const evId = ev.id||'';
+    const evSrc = ev.isRec ? 'rec' : 'once';
+    eh+=`<div class="ev-block" style="top:${top}px;height:${ht}px;left:${l};width:${w};background:${c.bg};color:${c.text}"
+      onclick="showEventPopup(event,'${evId}','${evSrc}','${fmtDate(d)}')">
       <div class="ev-title">${ev.title}${ev.isRec?' ↻':''}</div>
       <div class="ev-time">${fmtTime(ev.start)} – ${fmtTime(ev.end)}</div>
       ${ev.cat?`<div class="ev-tag">#${ev.cat}</div>`:''}
@@ -792,7 +796,9 @@ function renderWeek(){
       const c=clr(ev.cat);
       const top=ev.start*HOUR_H;
       const ht=Math.max((ev.end-ev.start)*HOUR_H-2,16);
-      col+=`<div class="week-ev" style="top:${top}px;height:${ht}px;background:${c.bg};color:${c.text}">${ev.title}</div>`;
+      const wEvId=ev.id||'', wEvSrc=ev.isRec?'rec':'once', wDs=fmtDate(d);
+      col+=`<div class="week-ev" style="top:${top}px;height:${ht}px;background:${c.bg};color:${c.text};cursor:pointer"
+        onclick="showEventPopup(event,'${wEvId}','${wEvSrc}','${wDs}')">${ev.title}</div>`;
     });
     dh+=`<div class="week-day-col" style="height:${totalPx}px">${col}</div>`;
   }
@@ -817,7 +823,7 @@ function renderMonth(){
     const dt=new Date(y,m,d);
     const it=isToday(dt);
     const evs=getEventsForDay(dt).slice(0,2);
-    const ehtml=evs.map(e=>{const c=clr(e.cat);return`<div class="month-ev" style="background:${c.bg};color:${c.text}">${e.title}</div>`;}).join('');
+    const ehtml=evs.map(e=>{const c=clr(e.cat);const mId=e.id||'',mSrc=e.isRec?'rec':'once',mDs=fmtDate(dt);return`<div class="month-ev" style="background:${c.bg};color:${c.text};cursor:pointer" onclick="event.stopPropagation();showEventPopup(event,'${mId}','${mSrc}','${mDs}')">${e.title}</div>`;}).join('');
     html+=`<div class="month-cell${it?' today':''}" onclick="jumpToDay(${y},${m},${d})"><div class="mday">${d}</div>${ehtml}</div>`;
   }
   const rem=(first+last)%7===0?0:7-(first+last)%7;
@@ -1317,6 +1323,39 @@ function renderSettings(){
   }
   const rw = document.getElementById('repeat-window');
   if(rw){ rw.value = String(REPEAT_WINDOW); }
+
+  // カレンダーイベント一覧
+  const calWrap = document.getElementById('settings-cal-list');
+  if(calWrap){
+    const DN=['日','月','火','水','木','金','土'];
+    let cHtml = '';
+    if(RECURRING.length===0 && ONCE.length===0){
+      cHtml = '<div style="font-size:13px;color:var(--text3);margin-bottom:4px">イベントがありません</div>';
+    }
+    RECURRING.forEach(ev=>{
+      const c = CAT_COLORS[ev.cat]||CAT_COLORS['その他'];
+      cHtml += `<div class="settings-proj-row" style="margin-bottom:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${c.bg};border:1.5px solid ${c.text};flex-shrink:0;display:inline-block"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.title}</div>
+          <div style="font-size:11px;color:var(--text3)">毎週${DN[ev.dow]}曜 ${fmtTime(ev.start)}–${fmtTime(ev.end)} #${ev.cat||''}</div>
+        </div>
+        <button class="proj-del-btn" style="opacity:1" onclick="if(confirm('「${ev.title}」を削除しますか？')){RECURRING=RECURRING.filter(r=>r.id!=='${ev.id}');refreshCalView();renderSettings();}">🗑</button>
+      </div>`;
+    });
+    ONCE.forEach(ev=>{
+      const c = CAT_COLORS[ev.cat]||CAT_COLORS['その他'];
+      cHtml += `<div class="settings-proj-row" style="margin-bottom:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${c.bg};border:1.5px solid ${c.text};flex-shrink:0;display:inline-block"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.title}</div>
+          <div style="font-size:11px;color:var(--text3)">${ev.date} ${fmtTime(ev.start)}–${fmtTime(ev.end)} #${ev.cat||''}</div>
+        </div>
+        <button class="proj-del-btn" style="opacity:1" onclick="if(confirm('「${ev.title}」を削除しますか？')){ONCE=ONCE.filter(o=>o.id!=='${ev.id}');refreshCalView();renderSettings();}">🗑</button>
+      </div>`;
+    });
+    calWrap.innerHTML = cHtml;
+  }
 }
 
 function deleteProject(pid){
@@ -1333,7 +1372,92 @@ function clearDoneTasks(){
 
 function resetAll(){
   PROJECTS = [];
+  RECURRING = [];
+  ONCE = [];
   renderAll();
+  refreshCalView();
+}
+
+// ===== CALENDAR EVENT POPUP =====
+function showEventPopup(e, evId, evSrc, dateStr){
+  e.stopPropagation();
+  const popup = document.getElementById('ev-popup');
+  const mask  = document.getElementById('ev-popup-mask');
+
+  let ev = null;
+  if(evSrc==='rec') ev = RECURRING.find(r=>r.id===evId);
+  else              ev = ONCE.find(o=>o.id===evId);
+  if(!ev){ closeEventPopup(); return; }
+
+  document.getElementById('evp-title').textContent = ev.title + (ev.isRec||evSrc==='rec' ? ' ↻' : '');
+  document.getElementById('evp-time').textContent  = fmtTime(ev.start) + ' – ' + fmtTime(ev.end);
+  document.getElementById('evp-cat').textContent   = ev.cat ? '#' + ev.cat : '';
+
+  const acts = document.getElementById('evp-actions');
+  if(evSrc==='rec'){
+    acts.innerHTML = `
+      <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
+        onclick="deleteCalEvent('rec','${evId}','one','${dateStr}')">📅 この日のみ削除</button>
+      <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
+        onclick="deleteCalEvent('rec','${evId}','after','${dateStr}')">📅➡ 今回以降すべて削除</button>
+      <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
+        onclick="deleteCalEvent('rec','${evId}','all','${dateStr}')">🗑 この定期イベントをすべて削除</button>`;
+  } else {
+    acts.innerHTML = `
+      <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
+        onclick="deleteCalEvent('once','${evId}','all','${dateStr}')">🗑 このイベントを削除</button>`;
+  }
+
+  // ポップアップ位置（クリック位置に合わせる）
+  const x = Math.min(e.clientX, window.innerWidth - 320);
+  const y = Math.min(e.clientY + 8, window.innerHeight - 220);
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.style.display = 'block';
+  mask.style.display  = 'block';
+}
+
+function closeEventPopup(){
+  document.getElementById('ev-popup').style.display = 'none';
+  document.getElementById('ev-popup-mask').style.display = 'none';
+}
+
+function deleteCalEvent(src, evId, mode, dateStr){
+  if(src==='rec'){
+    const ev = RECURRING.find(r=>r.id===evId);
+    if(!ev){ closeEventPopup(); return; }
+    if(mode==='all'){
+      RECURRING = RECURRING.filter(r=>r.id!==evId);
+    } else if(mode==='one'){
+      if(!ev.skipDates) ev.skipDates=[];
+      if(!ev.skipDates.includes(dateStr)) ev.skipDates.push(dateStr);
+    } else if(mode==='after'){
+      // dateStr の前日をendDateとして設定
+      const d = new Date(dateStr); d.setDate(d.getDate()-1);
+      ev.endDate = fmtDate(d);
+    }
+  } else {
+    ONCE = ONCE.filter(o=>o.id!==evId);
+  }
+  closeEventPopup();
+  refreshCalView();
+}
+
+// ============================================================
+// RECURRING にも skipDates / endDate を対応させる
+// ============================================================
+function getEventsForDayFiltered(date){
+  const ds = fmtDate(date), dow = date.getDay();
+  const today = new Date(); today.setHours(0,0,0,0);
+  return [
+    ...RECURRING.filter(e=>{
+      if(e.dow!==dow) return false;
+      if(e.skipDates && e.skipDates.includes(ds)) return false;
+      if(e.endDate && new Date(e.endDate) < date) return false;
+      return true;
+    }).map(e=>({...e,isRec:true})),
+    ...ONCE.filter(e=>e.date===ds).map(e=>({...e,isRec:false}))
+  ];
 }
 
 // 全ページを一括再描画（データ変更後は必ずこれを呼ぶ）
@@ -1343,6 +1467,7 @@ function renderAll(){
   renderProjects();
   renderTasks();
   if(curPage==='settings') renderSettings();
+  if(curPage==='calendar') refreshCalView();
 }
 
 // ===== INIT =====
@@ -1354,6 +1479,20 @@ renderDashboard();
 renderProjects();
 renderTasks();
 </script>
+
+<!-- ===== EVENT POPUP ===== -->
+<div id="ev-popup" style="display:none;position:fixed;z-index:300;background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.18);padding:16px;min-width:240px;max-width:300px">
+  <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
+    <div style="flex:1">
+      <div id="evp-title" style="font-size:14px;font-weight:500;margin-bottom:3px"></div>
+      <div id="evp-time" style="font-size:12px;color:var(--text2)"></div>
+      <div id="evp-cat" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+    </div>
+    <button onclick="closeEventPopup()" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 2px">×</button>
+  </div>
+  <div id="evp-actions" style="display:flex;flex-direction:column;gap:6px"></div>
+</div>
+<div id="ev-popup-mask" style="display:none;position:fixed;inset:0;z-index:299" onclick="closeEventPopup()"></div>
 
 <!-- ===== DELETE CONFIRM MODAL ===== -->
 <div class="del-modal-backdrop" id="del-modal">
