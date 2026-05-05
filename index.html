@@ -165,6 +165,20 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .kcard-del:hover{color:var(--red);background:var(--red-bg)}
 
 
+
+/* ======= TASK EDIT MODAL ======= */
+.task-edit-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:400;align-items:center;justify-content:center}
+.task-edit-modal-backdrop.open{display:flex}
+.task-edit-modal{background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:460px;max-width:93vw;box-shadow:0 8px 32px rgba(0,0,0,.18);max-height:90vh;overflow-y:auto}
+/* task-row hover で編集ボタン表示 */
+.task-row-edit-btn{opacity:0;border:none;background:none;cursor:pointer;color:var(--text2);font-size:12px;padding:3px 7px;border-radius:var(--radius);transition:all .15s;white-space:nowrap;flex-shrink:0}
+.task-row:hover .task-row-edit-btn{opacity:1}
+.task-row-edit-btn:hover{background:var(--bg3);color:var(--blue)}
+/* kcard 編集ボタン */
+.kcard-edit{position:absolute;top:6px;right:26px;opacity:0;border:none;background:none;cursor:pointer;color:var(--text2);font-size:12px;padding:2px 5px;border-radius:4px;transition:all .15s;line-height:1}
+.kcard:hover .kcard-edit{opacity:1}
+.kcard-edit:hover{color:var(--blue);background:var(--blue-bg)}
+
 /* ======= EDIT MODAL ======= */
 .edit-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:400;align-items:center;justify-content:center}
 .edit-modal-backdrop.open{display:flex}
@@ -659,6 +673,7 @@ function toggleCheck(el){
 // ===== MODAL =====
 document.getElementById('new-btn').addEventListener('click', openModal);
 document.getElementById('modal').addEventListener('click', closeModal);
+document.getElementById('task-edit-modal').addEventListener('click', closeTaskEditModal);
 
 function openModal(){
   const today = fmtDate(new Date());
@@ -1072,7 +1087,8 @@ function renderProjects(){
           <span style="font-size:12px;font-weight:500;color:var(--text2)">${task.title}</span>
           <span class="repeat-badge ${rClass}">↻ ${rLabel}</span>
           <span style="font-size:11px;color:var(--text3);margin-left:4px">${doneCount}/${repeatDates.length}完了</span>
-          <button onclick="event.stopPropagation();deleteTask('${proj.id}','${task.id}',null)" style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px" title="繰り返し全削除">全削除</button>
+          <button onclick="event.stopPropagation();openTaskEditModal('${proj.id}','${task.id}')" style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text2);font-size:12px;padding:2px 7px;border-radius:4px" title="編集">✏️ 編集</button>
+          <button onclick="event.stopPropagation();deleteTask('${proj.id}','${task.id}',null)" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px" title="繰り返し全削除">全削除</button>
         </div>
         <div class="repeat-group-body" id="${rgId}">`;
         if(repeatDates.length===0){
@@ -1105,6 +1121,7 @@ function renderProjects(){
           <div class="task-row-title${task.done?' done':''}" id="ttl-${task.id}">${task.title}</div>
           <span class="prio prio-${task.prio}">${{high:'高',mid:'中',low:'低'}[task.prio]}</span>
           ${tDueStr?`<span class="task-row-due${tOver?' overdue':''}">${tOver?'⚠ ':''}${tDueStr}</span>`:''}
+          <button class="task-row-edit-btn" onclick="openTaskEditModal('${proj.id}','${task.id}')">✏️ 編集</button>
           <button onclick="deleteTask('${proj.id}','${task.id}',null)" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;border-radius:4px;line-height:1" title="削除">×</button>
         </div>`;
       }
@@ -1524,6 +1541,7 @@ function renderTasks(){
         ${repeatBadge}
         ${tDueStr?`<span style="font-size:11px;color:${tOver?'var(--red)':'var(--text3)'}">${tOver?'⚠ ':''}${tDueStr}</span>`:''}
       </div>
+      <button class="kcard-edit" onclick="openTaskEditModal('${t.projId}','${t.id}')">✏️</button>
       <button class="kcard-del" onclick="quickDeleteTask('${t.projId}','${t.id}')" title="削除">×</button>
     </div>`;
   }
@@ -1683,6 +1701,107 @@ function importData(input){
     input.value = ''; // リセット（同じファイルを再度選べるように）
   };
   reader.readAsText(file);
+}
+
+// ===== TASK EDIT MODAL =====
+let _taskEditCtx = null; // {pid, tid}
+
+function onTemRepeatChange(val){
+  const isRepeat = val !== 'none';
+  document.getElementById('tem-row-due').style.display          = isRepeat ? 'none'  : 'block';
+  document.getElementById('tem-row-repeat-dates').style.display = isRepeat ? 'block' : 'none';
+}
+
+function openTaskEditModal(pid, tid){
+  const proj = PROJECTS.find(p=>p.id===pid);
+  if(!proj) return;
+  const task = proj.tasks.find(t=>t.id===tid);
+  if(!task) return;
+
+  _taskEditCtx = {pid, tid};
+
+  // プロジェクト選択肢を動的生成
+  const sel = document.getElementById('tem-task-proj');
+  sel.innerHTML = PROJECTS.map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.name}</option>`).join('');
+
+  document.getElementById('tem-task-title').value  = task.title;
+  document.getElementById('tem-task-prio').value   = task.prio || 'mid';
+  document.getElementById('tem-task-repeat').value = task.repeat || 'none';
+  document.getElementById('tem-task-memo').value   = task.memo || '';
+
+  const repeat = task.repeat || 'none';
+  onTemRepeatChange(repeat);
+
+  if(repeat === 'none'){
+    document.getElementById('tem-task-due').value = task.due || '';
+  } else {
+    document.getElementById('tem-task-rstart').value = task.repeatStart || task.due || '';
+    document.getElementById('tem-task-rend').value   = task.repeatEnd   || task.endDate || '';
+  }
+
+  document.getElementById('task-edit-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('tem-task-title').focus(), 50);
+}
+
+function closeTaskEditModal(){
+  document.getElementById('task-edit-modal').classList.remove('open');
+  _taskEditCtx = null;
+}
+
+function saveTaskEdit(){
+  if(!_taskEditCtx) return;
+  const {pid, tid} = _taskEditCtx;
+
+  const title  = document.getElementById('tem-task-title').value.trim();
+  if(!title){ alert('タイトルを入力してください'); return; }
+
+  const newPid  = document.getElementById('tem-task-proj').value;
+  const prio    = document.getElementById('tem-task-prio').value;
+  const repeat  = document.getElementById('tem-task-repeat').value || 'none';
+  const memo    = document.getElementById('tem-task-memo').value.trim();
+
+  let due = '', repeatStart = null, repeatEnd = null;
+  if(repeat === 'none'){
+    due = document.getElementById('tem-task-due').value;
+  } else {
+    repeatStart = document.getElementById('tem-task-rstart').value;
+    repeatEnd   = document.getElementById('tem-task-rend').value || null;
+    if(!repeatStart){ alert('繰り返し開始日を入力してください'); return; }
+    if(repeatEnd && repeatEnd < repeatStart){ alert('終了日は開始日より後にしてください'); return; }
+    due = repeatStart;
+  }
+
+  // 元のプロジェクトからタスクを取り出す
+  const srcProj = PROJECTS.find(p=>p.id===pid);
+  if(!srcProj) return;
+  const taskIdx = srcProj.tasks.findIndex(t=>t.id===tid);
+  if(taskIdx < 0) return;
+  const task = srcProj.tasks[taskIdx];
+
+  // フィールド更新
+  task.title       = title;
+  task.prio        = prio;
+  task.repeat      = repeat;
+  task.due         = due;
+  task.repeatStart = repeatStart;
+  task.repeatEnd   = repeatEnd;
+  task.endDate     = repeatEnd || null;
+  task.memo        = memo;
+  // 繰り返し設定が変わった場合はリセット
+  if(repeat !== (task._origRepeat||task.repeat)){
+    task.skipDates       = [];
+    task.doneOccurrences = [];
+  }
+
+  // プロジェクト移動が必要な場合
+  if(newPid && newPid !== pid){
+    srcProj.tasks.splice(taskIdx, 1);
+    const destProj = PROJECTS.find(p=>p.id===newPid);
+    if(destProj) destProj.tasks.push(task);
+  }
+
+  closeTaskEditModal();
+  renderAll();
 }
 
 // ===== CALENDAR EVENT POPUP =====
@@ -1910,6 +2029,65 @@ renderTasks();
   <div id="evp-actions" style="display:flex;flex-direction:column;gap:6px"></div>
 </div>
 <div id="ev-popup-mask" style="display:none;position:fixed;inset:0;z-index:299" onclick="closeEventPopup()"></div>
+
+<!-- ===== TASK EDIT MODAL ===== -->
+<div class="task-edit-modal-backdrop" id="task-edit-modal">
+  <div class="task-edit-modal" onclick="event.stopPropagation()">
+    <div style="font-size:15px;font-weight:500;margin-bottom:16px" id="tem-title">タスクを編集</div>
+    <div class="form-row">
+      <label class="form-label">タイトル</label>
+      <input class="form-input" id="tem-task-title" type="text">
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">プロジェクト</label>
+        <select class="form-input" id="tem-task-proj"></select>
+      </div>
+      <div>
+        <label class="form-label">優先度</label>
+        <select class="form-input" id="tem-task-prio">
+          <option value="high">高</option>
+          <option value="mid">中</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">繰り返し</label>
+      <select class="form-input" id="tem-task-repeat" onchange="onTemRepeatChange(this.value)">
+        <option value="none">なし</option>
+        <option value="daily">毎日</option>
+        <option value="weekly">毎週（同じ曜日）</option>
+      </select>
+    </div>
+    <!-- 繰り返しなし: 締切日 -->
+    <div class="form-row" id="tem-row-due">
+      <label class="form-label">締切日</label>
+      <input class="form-input" id="tem-task-due" type="date">
+    </div>
+    <!-- 繰り返しあり: 開始日・終了日 -->
+    <div id="tem-row-repeat-dates" style="display:none">
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">繰り返し開始日 <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="tem-task-rstart" type="date">
+        </div>
+        <div>
+          <label class="form-label">繰り返し終了日（任意）</label>
+          <input class="form-input" id="tem-task-rend" type="date">
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">メモ</label>
+      <textarea class="form-input" id="tem-task-memo" rows="2" style="resize:vertical"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTaskEditModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTaskEdit()">保存</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== EDIT EVENT MODAL ===== -->
 <div class="edit-modal-backdrop" id="edit-ev-modal">
