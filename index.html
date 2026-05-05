@@ -312,6 +312,13 @@ select.form-input{cursor:pointer}
             <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('完了済みタスクをすべて削除しますか？')){clearDoneTasks();renderAll();renderSettings();}">🗑 完了済みタスクをすべて削除</button>
             <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('カレンダーのイベントをすべて削除しますか？')){RECURRING=[];ONCE=[];refreshCalView();renderSettings();}">🗑 カレンダーイベントをすべて削除</button>
             <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('全データをリセットしますか？この操作は元に戻せません。')){resetAll();}">⚠ すべてのデータをリセット</button>
+            <button class="btn" style="justify-content:flex-start" onclick="exportData()">📥 データをエクスポート（JSON）</button>
+            <button class="btn" style="justify-content:flex-start" onclick="document.getElementById('import-file').click()">📤 データをインポート（JSON）</button>
+            <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+            <div style="font-size:11px;color:var(--text3);line-height:1.6;padding:4px 0">
+              ※ データはブラウザのLocalStorageに自動保存されます。<br>
+              同じブラウザ・同じドメインでアクセスする限りリロードしても保持されます。
+            </div>
           </div>
         </div>
       </div>
@@ -498,55 +505,75 @@ const CAT_COLORS = {
 };
 
 // recurring: dow 0=Sun
-let RECURRING = [
-  {id:'r1',dow:1,start:9,  end:10.5,title:'IFRS会計論',       cat:'講義'},
-  {id:'r2',dow:3,start:10.5,end:12, title:'管理会計分析',       cat:'講義'},
-  {id:'r3',dow:2,start:14, end:15.5,title:'企業価値マネジメント論',cat:'講義'},
-  {id:'r4',dow:4,start:9,  end:10.5,title:'租税法',            cat:'講義'},
+// ===== LOCAL STORAGE =====
+const LS_KEY = 'taskflow_v1';
+
+const DEFAULT_RECURRING = [
+  {id:'r1',dow:1,start:9,  end:10.5,title:'IFRS会計論',       cat:'講義',skipDates:[],endDate:null},
+  {id:'r2',dow:3,start:10.5,end:12, title:'管理会計分析',       cat:'講義',skipDates:[],endDate:null},
+  {id:'r3',dow:2,start:14, end:15.5,title:'企業価値マネジメント論',cat:'講義',skipDates:[],endDate:null},
+  {id:'r4',dow:4,start:9,  end:10.5,title:'租税法',            cat:'講義',skipDates:[],endDate:null},
 ];
-let ONCE = [
+const DEFAULT_ONCE = [
   {id:'o1',date:'2026-05-05',start:13,end:15,  title:'論文ミーティング',    cat:'研究'},
   {id:'o2',date:'2026-05-08',start:17,end:18,  title:'企業価値論 課題提出', cat:'締切'},
   {id:'o3',date:'2026-05-12',start:10,end:11,  title:'ゼミ発表準備',        cat:'研究'},
   {id:'o4',date:'2026-05-15',start:15,end:16,  title:'管理会計 提出',       cat:'締切'},
   {id:'o5',date:'2026-05-20',start:13,end:14.5,title:'ゼミ発表',            cat:'発表'},
 ];
-
-// ===== PROJECTS DATA =====
-let PROJECTS = [
-  {id:'p1', name:'決算分析',   color:'#185FA5', colorVar:'var(--blue)',  due:'2026-05-31',
+const DEFAULT_PROJECTS = [
+  {id:'p1', name:'決算分析',   color:'#185FA5', colorVar:'', due:'2026-05-31',
    tasks:[
-     {id:'t1',title:'セグメント分析まとめ',    prio:'mid', due:'2026-05-20', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t2',title:'予算差異分析レポート',    prio:'high',due:'2026-05-06', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t3',title:'ROIC計算シート更新',     prio:'low', due:'2026-05-28', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t4',title:'売上高分解分析',         prio:'mid', due:'2026-05-10', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t5',title:'有報ダウンロード・整理',   prio:'low', due:'2026-05-08', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t6',title:'比較表作成（vs Recruit）',prio:'mid', due:'2026-05-15', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t7',title:'ARR・CAC試算',          prio:'high',due:'2026-05-12', done:true,  repeat:'none',   skipDates:[], endDate:null},
-   ]
-  },
-  {id:'p2', name:'管理会計研究', color:'#3B6D11', colorVar:'var(--green)', due:'2026-05-15',
+     {id:'t1',title:'セグメント分析まとめ',    prio:'mid', due:'2026-05-20', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t2',title:'予算差異分析レポート',    prio:'high',due:'2026-05-06', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t3',title:'ROIC計算シート更新',     prio:'low', due:'2026-05-28', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t4',title:'売上高分解分析',         prio:'mid', due:'2026-05-10', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t5',title:'有報ダウンロード・整理',   prio:'low', due:'2026-05-08', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t6',title:'比較表作成（vs Recruit）',prio:'mid', due:'2026-05-15', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t7',title:'ARR・CAC試算',          prio:'high',due:'2026-05-12', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+   ]},
+  {id:'p2', name:'管理会計研究', color:'#3B6D11', colorVar:'', due:'2026-05-15',
    tasks:[
-     {id:'t8', title:'What-If感度分析',       prio:'mid', due:'2026-05-07', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t9', title:'Chapter4 演習問題',     prio:'high',due:'2026-05-05', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t10',title:'売上高分解分析まとめ',   prio:'mid', due:'2026-05-04', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t11',title:'ゲシュタルト原則まとめ', prio:'low', due:'2026-04-28', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t12',title:'直接材料費差異分析',     prio:'mid', due:'2026-04-25', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t13',title:'探索的分析レポート',     prio:'mid', due:'2026-05-01', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t14',title:'毎週ゼミ議事録まとめ',   prio:'mid', due:'2026-05-05', done:false, repeat:'weekly', skipDates:[], endDate:null},
-   ]
-  },
-  {id:'p3', name:'就活準備',   color:'#854F0B', colorVar:'var(--amber)', due:'2026-06-30',
+     {id:'t8', title:'What-If感度分析',       prio:'mid', due:'2026-05-07', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t9', title:'Chapter4 演習問題',     prio:'high',due:'2026-05-05', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t10',title:'売上高分解分析まとめ',   prio:'mid', due:'2026-05-04', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t11',title:'ゲシュタルト原則まとめ', prio:'low', due:'2026-04-28', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t12',title:'直接材料費差異分析',     prio:'mid', due:'2026-04-25', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t13',title:'探索的分析レポート',     prio:'mid', due:'2026-05-01', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t14',title:'毎週ゼミ議事録まとめ',   prio:'mid', due:'2026-05-05', done:false, repeat:'weekly', skipDates:[], doneOccurrences:[], endDate:null},
+   ]},
+  {id:'p3', name:'就活準備',   color:'#854F0B', colorVar:'', due:'2026-06-30',
    tasks:[
-     {id:'t15',title:'企業価値論 課題提出',    prio:'high',due:'2026-05-08', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t16',title:'naidan辞退メール送付',   prio:'high',due:'2026-05-10', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t17',title:'内定先 質問リスト作成',  prio:'mid', due:'2026-05-20', done:false, repeat:'none',   skipDates:[], endDate:null},
-     {id:'t18',title:'履歴書・ES保存整理',     prio:'low', due:'2026-05-31', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t19',title:'OB訪問アポ取り',        prio:'mid', due:'2026-04-30', done:true,  repeat:'none',   skipDates:[], endDate:null},
-     {id:'t20',title:'業界研究デイリーメモ',   prio:'low', due:'2026-05-05', done:false, repeat:'daily',  skipDates:[], endDate:'2026-05-31'},
-   ]
-  },
+     {id:'t15',title:'企業価値論 課題提出',    prio:'high',due:'2026-05-08', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t16',title:'naidan辞退メール送付',   prio:'high',due:'2026-05-10', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t17',title:'内定先 質問リスト作成',  prio:'mid', due:'2026-05-20', done:false, repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t18',title:'履歴書・ES保存整理',     prio:'low', due:'2026-05-31', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t19',title:'OB訪問アポ取り',        prio:'mid', due:'2026-04-30', done:true,  repeat:'none',   skipDates:[], doneOccurrences:[], endDate:null},
+     {id:'t20',title:'業界研究デイリーメモ',   prio:'low', due:'2026-05-05', done:false, repeat:'daily',  skipDates:[], doneOccurrences:[], endDate:'2026-05-31'},
+   ]},
 ];
+
+// LocalStorageからロード（なければデフォルト値を使用）
+function loadData(){
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){ return null; }
+}
+
+function saveData(){
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      PROJECTS, RECURRING, ONCE, SHOW_DONE, REPEAT_WINDOW
+    }));
+  } catch(e){ console.warn('LocalStorage save failed:', e); }
+}
+
+const _saved = loadData();
+let RECURRING = _saved ? _saved.RECURRING : JSON.parse(JSON.stringify(DEFAULT_RECURRING));
+let ONCE      = _saved ? _saved.ONCE      : JSON.parse(JSON.stringify(DEFAULT_ONCE));
+let PROJECTS  = _saved ? _saved.PROJECTS  : JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
 
 // ===== STATE =====
 let curPage = 'dashboard';
@@ -1242,8 +1269,8 @@ function renderSidebarProjects(){
 
 // ===== TASK FILTER STATE =====
 let taskFilter = 'all';
-let REPEAT_WINDOW = 28;
-let SHOW_DONE = true;
+let REPEAT_WINDOW = _saved ? (_saved.REPEAT_WINDOW||28) : 28;
+let SHOW_DONE     = _saved ? (_saved.SHOW_DONE!==undefined ? _saved.SHOW_DONE : true) : true;
 
 function setTaskFilter(f){
   taskFilter = f;
@@ -1406,8 +1433,50 @@ function resetAll(){
   PROJECTS = [];
   RECURRING = [];
   ONCE = [];
+  SHOW_DONE = true;
+  REPEAT_WINDOW = 28;
+  saveData();
   renderAll();
   refreshCalView();
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify({PROJECTS,RECURRING,ONCE,SHOW_DONE,REPEAT_WINDOW}, null, 2)],
+    {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'taskflow_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try {
+      const d = JSON.parse(e.target.result);
+      if(!d.PROJECTS || !d.RECURRING || !d.ONCE){
+        alert('ファイルの形式が正しくありません'); return;
+      }
+      if(!confirm('現在のデータをインポートデータで上書きしますか？')) return;
+      PROJECTS      = d.PROJECTS;
+      RECURRING     = d.RECURRING;
+      ONCE          = d.ONCE;
+      SHOW_DONE     = d.SHOW_DONE !== undefined ? d.SHOW_DONE : true;
+      REPEAT_WINDOW = d.REPEAT_WINDOW || 28;
+      saveData();
+      renderAll();
+      refreshCalView();
+      alert('インポートが完了しました');
+    } catch(err){
+      alert('JSONの読み込みに失敗しました: ' + err.message);
+    }
+    input.value = ''; // リセット（同じファイルを再度選べるように）
+  };
+  reader.readAsText(file);
 }
 
 // ===== CALENDAR EVENT POPUP =====
@@ -1554,6 +1623,7 @@ function saveEditEv(){
   }
 
   closeEditEvModal();
+  saveData();
   refreshCalView();
   if(curPage==='settings') renderSettings();
 }
@@ -1576,6 +1646,7 @@ function deleteCalEvent(src, evId, mode, dateStr){
     ONCE = ONCE.filter(o=>o.id!==evId);
   }
   closeEventPopup();
+  saveData();
   refreshCalView();
 }
 
@@ -1598,6 +1669,7 @@ function getEventsForDayFiltered(date){
 
 // 全ページを一括再描画（データ変更後は必ずこれを呼ぶ）
 function renderAll(){
+  saveData(); // データをLocalStorageに自動保存
   renderSidebarProjects();
   renderDashboard();
   renderProjects();
