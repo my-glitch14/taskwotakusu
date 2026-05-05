@@ -1402,16 +1402,36 @@ function renderSidebarProjects(){
     html += '<div style="font-size:11px;color:var(--text3);padding:4px 10px">なし</div>';
   } else {
     PROJECTS.forEach(proj=>{
-      html += `<div class="nav-item sb-proj-link" data-page="projects" style="cursor:pointer">
+      html += `<div class="nav-item sb-proj-link" data-projid="${proj.id}" style="cursor:pointer">
         <span class="dot" style="background:${proj.color}"></span>${proj.name}
       </div>`;
     });
   }
   wrap.innerHTML = html;
-  // 動的生成後にイベントを再アタッチ
   wrap.querySelectorAll('.sb-proj-link').forEach(el=>{
-    el.addEventListener('click', ()=> navToPage('projects', el));
+    el.addEventListener('click', ()=> jumpToProject(el.dataset.projid));
   });
+}
+
+function jumpToProject(pid){
+  const projNavEl = document.querySelector('.nav-item[data-page="projects"]');
+  navToPage('projects', projNavEl);
+  setTimeout(()=>{
+    const card = document.getElementById('pc-'+pid);
+    if(!card) return;
+    // 折りたたまれていたら開く
+    const tree = document.getElementById('tree-'+pid);
+    const chev = document.getElementById('chev-'+pid);
+    if(tree && !tree.classList.contains('open')){
+      tree.classList.add('open');
+      if(chev) chev.classList.add('open');
+    }
+    card.scrollIntoView({behavior:'smooth', block:'start'});
+    // ハイライト
+    card.style.transition='box-shadow .2s';
+    card.style.boxShadow='0 0 0 2px var(--blue)';
+    setTimeout(()=>{ card.style.boxShadow=''; }, 1200);
+  }, 80);
 }
 
 // ===== TASK FILTER STATE =====
