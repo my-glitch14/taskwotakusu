@@ -533,6 +533,66 @@ select.form-input{cursor:pointer}
   </div>
 </div>
 
+<!-- ===== TASK EDIT MODAL ===== -->
+<div class="task-edit-modal-backdrop" id="task-edit-modal">
+  <div class="task-edit-modal" onclick="event.stopPropagation()">
+    <div style="font-size:15px;font-weight:500;margin-bottom:16px" id="tem-title">タスクを編集</div>
+    <div class="form-row">
+      <label class="form-label">タイトル</label>
+      <input class="form-input" id="tem-task-title" type="text">
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">プロジェクト</label>
+        <select class="form-input" id="tem-task-proj"></select>
+      </div>
+      <div>
+        <label class="form-label">優先度</label>
+        <select class="form-input" id="tem-task-prio">
+          <option value="high">高</option>
+          <option value="mid">中</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">繰り返し</label>
+      <select class="form-input" id="tem-task-repeat" onchange="onTemRepeatChange(this.value)">
+        <option value="none">なし</option>
+        <option value="daily">毎日</option>
+        <option value="weekly">毎週（同じ曜日）</option>
+      </select>
+    </div>
+    <!-- 繰り返しなし: 締切日 -->
+    <div class="form-row" id="tem-row-due">
+      <label class="form-label">締切日</label>
+      <input class="form-input" id="tem-task-due" type="date">
+    </div>
+    <!-- 繰り返しあり: 開始日・終了日 -->
+    <div id="tem-row-repeat-dates" style="display:none">
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">繰り返し開始日 <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="tem-task-rstart" type="date">
+        </div>
+        <div>
+          <label class="form-label">繰り返し終了日（任意）</label>
+          <input class="form-input" id="tem-task-rend" type="date">
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">メモ</label>
+      <textarea class="form-input" id="tem-task-memo" rows="2" style="resize:vertical"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTaskEditModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTaskEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+
 <script>
 // ===== DATA =====
 const HOUR_H = 56;
@@ -2029,65 +2089,6 @@ renderTasks();
   <div id="evp-actions" style="display:flex;flex-direction:column;gap:6px"></div>
 </div>
 <div id="ev-popup-mask" style="display:none;position:fixed;inset:0;z-index:299" onclick="closeEventPopup()"></div>
-
-<!-- ===== TASK EDIT MODAL ===== -->
-<div class="task-edit-modal-backdrop" id="task-edit-modal">
-  <div class="task-edit-modal" onclick="event.stopPropagation()">
-    <div style="font-size:15px;font-weight:500;margin-bottom:16px" id="tem-title">タスクを編集</div>
-    <div class="form-row">
-      <label class="form-label">タイトル</label>
-      <input class="form-input" id="tem-task-title" type="text">
-    </div>
-    <div class="form-row-2">
-      <div>
-        <label class="form-label">プロジェクト</label>
-        <select class="form-input" id="tem-task-proj"></select>
-      </div>
-      <div>
-        <label class="form-label">優先度</label>
-        <select class="form-input" id="tem-task-prio">
-          <option value="high">高</option>
-          <option value="mid">中</option>
-          <option value="low">低</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="form-label">繰り返し</label>
-      <select class="form-input" id="tem-task-repeat" onchange="onTemRepeatChange(this.value)">
-        <option value="none">なし</option>
-        <option value="daily">毎日</option>
-        <option value="weekly">毎週（同じ曜日）</option>
-      </select>
-    </div>
-    <!-- 繰り返しなし: 締切日 -->
-    <div class="form-row" id="tem-row-due">
-      <label class="form-label">締切日</label>
-      <input class="form-input" id="tem-task-due" type="date">
-    </div>
-    <!-- 繰り返しあり: 開始日・終了日 -->
-    <div id="tem-row-repeat-dates" style="display:none">
-      <div class="form-row-2">
-        <div>
-          <label class="form-label">繰り返し開始日 <span style="color:var(--red)">*</span></label>
-          <input class="form-input" id="tem-task-rstart" type="date">
-        </div>
-        <div>
-          <label class="form-label">繰り返し終了日（任意）</label>
-          <input class="form-input" id="tem-task-rend" type="date">
-        </div>
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="form-label">メモ</label>
-      <textarea class="form-input" id="tem-task-memo" rows="2" style="resize:vertical"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeTaskEditModal()">キャンセル</button>
-      <button class="btn btn-primary" onclick="saveTaskEdit()">保存</button>
-    </div>
-  </div>
-</div>
 
 <!-- ===== EDIT EVENT MODAL ===== -->
 <div class="edit-modal-backdrop" id="edit-ev-modal">
