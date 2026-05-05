@@ -152,6 +152,18 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .proj-summary-card{background:var(--bg2);border-radius:var(--radius);padding:14px 16px;margin-top:4px}
 
 
+
+/* ======= SETTINGS ======= */
+.settings-proj-row{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px}
+.settings-proj-row:hover .proj-del-btn{opacity:1}
+.proj-del-btn{opacity:0;border:none;background:none;cursor:pointer;color:var(--red);font-size:13px;padding:4px 8px;border-radius:var(--radius);transition:all .15s}
+.proj-del-btn:hover{background:var(--red-bg)}
+/* ======= TASK CARD HOVER DELETE ======= */
+.kcard{position:relative}
+.kcard-del{position:absolute;top:6px;right:6px;opacity:0;border:none;background:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 5px;border-radius:4px;transition:all .15s;line-height:1}
+.kcard:hover .kcard-del{opacity:1}
+.kcard-del:hover{color:var(--red);background:var(--red-bg)}
+
 /* ======= REPEAT BADGE ======= */
 .repeat-badge{font-size:10px;padding:1px 6px;border-radius:8px;background:var(--blue-bg);color:var(--blue-text);white-space:nowrap;flex-shrink:0}
 .repeat-badge.daily{background:#EAF3DE;color:#27500A}
@@ -199,12 +211,12 @@ select.form-input{cursor:pointer}
     <div class="nav-item" data-page="calendar">▦ カレンダー</div>
     <div style="margin-top:16px">
       <div class="sidebar-section">プロジェクト</div>
-      <div class="nav-item"><span class="dot" style="background:#185FA5"></span>決算分析</div>
-      <div class="nav-item"><span class="dot" style="background:#3B6D11"></span>管理会計研究</div>
-      <div class="nav-item"><span class="dot" style="background:#854F0B"></span>就活準備</div>
+      <div class="nav-item" data-page="projects" id="sb-p1"><span class="dot" style="background:#185FA5"></span>決算分析</div>
+      <div class="nav-item" data-page="projects" id="sb-p2"><span class="dot" style="background:#3B6D11"></span>管理会計研究</div>
+      <div class="nav-item" data-page="projects" id="sb-p3"><span class="dot" style="background:#854F0B"></span>就活準備</div>
     </div>
     <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
-      <div class="nav-item">◉ 設定</div>
+      <div class="nav-item" data-page="settings">◉ 設定</div>
     </div>
   </div>
 
@@ -267,31 +279,13 @@ select.form-input{cursor:pointer}
     <!-- ===== TASKS ===== -->
     <div class="page" id="page-tasks">
       <div class="page-scroll">
-        <div style="display:flex;gap:6px;margin-bottom:16px">
-          <button class="btn" style="background:var(--bg2)">すべて</button>
-          <button class="btn">未完了</button>
-          <button class="btn">完了</button>
+        <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <button class="btn" id="filter-all" style="background:var(--bg2)" onclick="setTaskFilter('all')">すべて</button>
+          <button class="btn" id="filter-todo" onclick="setTaskFilter('todo')">未完了</button>
+          <button class="btn" id="filter-done" onclick="setTaskFilter('done')">完了</button>
+          <div style="margin-left:auto;font-size:12px;color:var(--text3)" id="task-count-label"></div>
         </div>
-        <div class="kanban">
-          <div class="k-col">
-            <div class="k-col-header"><span class="k-col-title">未着手</span><span class="k-count">3</span></div>
-            <div class="kcard"><div class="kcard-title">セグメント分析まとめ</div><div class="kcard-meta"><span class="prio prio-mid">中</span><span class="tag">決算分析</span></div></div>
-            <div class="kcard"><div class="kcard-title">企業価値論 課題提出</div><div class="kcard-meta"><span class="prio prio-high">高</span><span style="font-size:11px;color:var(--red)">5/8締切</span></div></div>
-            <div class="kcard"><div class="kcard-title">ROIC計算シート更新</div><div class="kcard-meta"><span class="prio prio-low">低</span></div></div>
-          </div>
-          <div class="k-col">
-            <div class="k-col-header"><span class="k-col-title">進行中</span><span class="k-count">2</span></div>
-            <div class="kcard"><div class="kcard-title">予算差異分析レポート</div><div class="kcard-meta"><span class="prio prio-high">高</span><span style="font-size:11px;color:var(--red)">明日締切</span></div></div>
-            <div class="kcard"><div class="kcard-title">What-If感度分析</div><div class="kcard-meta"><span class="prio prio-mid">中</span><span class="tag">管理会計</span></div></div>
-          </div>
-          <div class="k-col">
-            <div class="k-col-header"><span class="k-col-title">完了</span><span class="k-count">4</span></div>
-            <div class="kcard done"><div class="kcard-title">Chapter4 演習問題</div></div>
-            <div class="kcard done"><div class="kcard-title">売上高分解分析</div></div>
-            <div class="kcard done"><div class="kcard-title">ゲシュタルト原則まとめ</div></div>
-            <div class="kcard done"><div class="kcard-title">直接材料費差異分析</div></div>
-          </div>
-        </div>
+        <div class="kanban" id="tasks-kanban"></div>
       </div>
     </div>
 
@@ -299,6 +293,49 @@ select.form-input{cursor:pointer}
     <div class="page" id="page-projects">
       <div class="page-scroll" id="proj-list-wrap">
         <!-- JS で renderProjects() が描画 -->
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div class="page" id="page-settings">
+      <div class="page-scroll">
+        <div style="max-width:480px">
+          <div class="section-title" style="margin-bottom:12px">プロジェクトの管理</div>
+          <div id="settings-proj-list"></div>
+          <button class="btn btn-primary" style="margin-top:4px" onclick="openModal();setModalType('project',document.querySelectorAll('.mtype-tab')[2])">＋ プロジェクトを追加</button>
+
+          <div class="section-title" style="margin-top:24px;margin-bottom:12px">表示設定</div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div>
+                <div style="font-size:13px">完了タスクを表示</div>
+                <div style="font-size:11px;color:var(--text3)">プロジェクトビューで完了済みタスクを表示する</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer">
+                <input type="checkbox" id="toggle-done" checked style="opacity:0;width:0;height:0">
+                <span id="toggle-done-track" style="position:absolute;inset:0;background:#185FA5;border-radius:10px;transition:.2s"></span>
+                <span id="toggle-done-thumb" style="position:absolute;left:18px;top:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s"></span>
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-size:13px">繰り返しタスクの展開範囲</div>
+                <div style="font-size:11px;color:var(--text3)">何日先まで展開して表示するか</div>
+              </div>
+              <select class="form-input" id="repeat-window" style="width:90px" onchange="REPEAT_WINDOW=parseInt(this.value);renderProjects()">
+                <option value="14">14日</option>
+                <option value="28" selected>28日</option>
+                <option value="60">60日</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="section-title" style="margin-top:24px;margin-bottom:12px">データ管理</div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+            <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('完了済みタスクをすべて削除しますか？')){clearDoneTasks();renderProjects();renderSettings();}">🗑 完了済みタスクをすべて削除</button>
+            <button class="btn" style="justify-content:flex-start;color:var(--red);border-color:var(--red)" onclick="if(confirm('全データをリセットしますか？この操作は元に戻せません。')){resetAll();}">⚠ すべてのデータをリセット</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -567,13 +604,18 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
     const p = el.dataset.page;
     document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-    document.getElementById('page-'+p).classList.add('active');
-    el.classList.add('active');
+    const pageEl = document.getElementById('page-'+p);
+    if(pageEl) pageEl.classList.add('active');
+    // サイドバーで同じdata-pageを持つ要素全部をactive（プロジェクトリンクなど）
+    document.querySelectorAll(`.nav-item[data-page="${p}"]`).forEach(x=>x.classList.add('active'));
     document.getElementById('page-title').textContent = {
-      dashboard:'ダッシュボード',tasks:'タスク管理',projects:'プロジェクト',calendar:'カレンダー'
-    }[p];
+      dashboard:'ダッシュボード',tasks:'タスク管理',projects:'プロジェクト',
+      calendar:'カレンダー',settings:'設定'
+    }[p]||p;
     curPage = p;
     if(p==='calendar') refreshCalView();
+    if(p==='tasks') renderTasks();
+    if(p==='settings') renderSettings();
   });
 });
 
@@ -652,7 +694,12 @@ function saveNew(){
   } else {
     const name = document.getElementById('f-proj-name').value.trim();
     if(!name){alert('プロジェクト名を入力してください');return;}
-    alert('プロジェクト「'+name+'」を追加しました！');
+    const newPid = 'p'+Date.now();
+    const PROJ_COLORS = ['#185FA5','#3B6D11','#854F0B','#A32D2D','#533BB7','#0F6E56'];
+    const nextColor = PROJ_COLORS[PROJECTS.length % PROJ_COLORS.length];
+    PROJECTS.push({id:newPid, name, color:nextColor, colorVar:'', due:document.getElementById('f-proj-due').value||null, tasks:[]});
+    renderProjects();
+    renderSettings();
   }
   closeModal();
 }
@@ -1080,11 +1127,154 @@ function openAddTaskModal(pid){
   setTimeout(()=>document.getElementById('f-task-title').focus(),50);
 }
 
+// ===== TASK FILTER STATE =====
+let taskFilter = 'all';
+let REPEAT_WINDOW = 28;
+let SHOW_DONE = true;
+
+function setTaskFilter(f){
+  taskFilter = f;
+  ['all','todo','done'].forEach(x=>{
+    const b = document.getElementById('filter-'+x);
+    if(b) b.style.background = x===f ? 'var(--bg2)' : '';
+  });
+  renderTasks();
+}
+
+// ===== RENDER TASKS (kanban from PROJECTS data) =====
+function renderTasks(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  // 全タスクをフラット化
+  const all = [];
+  PROJECTS.forEach(proj=>{
+    proj.tasks.forEach(task=>{
+      if(task.repeat && task.repeat!=='none') return; // 繰り返しはここでは省略
+      all.push({...task, projName:proj.name, projColor:proj.color, projId:proj.id});
+    });
+  });
+
+  const todo   = all.filter(t=>!t.done);
+  const done   = all.filter(t=>t.done);
+
+  let showTodo = (taskFilter==='all'||taskFilter==='todo') ? todo : [];
+  let showDone = (taskFilter==='all'||taskFilter==='done') ? done : [];
+
+  // ステータスで3列に分類
+  const notStarted = showTodo.filter(t=>{ const d=t.due?new Date(t.due):null; return !d||d>=today; }).slice(0,10);
+  const overdue    = showTodo.filter(t=>{ const d=t.due?new Date(t.due):null; return d&&d<today; });
+  const doneList   = showDone.slice(0,10);
+
+  const label = document.getElementById('task-count-label');
+  if(label) label.textContent = `合計 ${all.length} 件（未完了 ${todo.length}・完了 ${done.length}）`;
+
+  function cardHtml(t){
+    const tDue = t.due ? new Date(t.due) : null;
+    const tDueStr = t.due ? t.due.slice(5).replace('-','/') : '';
+    const tOver = tDue && tDue < today && !t.done;
+    return `<div class="kcard${t.done?' done':''}">
+      <div class="kcard-title">${t.title}</div>
+      <div class="kcard-meta" style="margin-top:4px">
+        <span class="prio prio-${t.prio}">${{high:'高',mid:'中',low:'低'}[t.prio]}</span>
+        <span class="tag" style="background:${t.projColor}22;color:${t.projColor}">${t.projName}</span>
+        ${tDueStr?`<span style="font-size:11px;color:${tOver?'var(--red)':'var(--text3)'}">${tOver?'⚠ ':''}${tDueStr}</span>`:''}
+      </div>
+      <button class="kcard-del" onclick="quickDeleteTask('${t.projId}','${t.id}')" title="削除">×</button>
+    </div>`;
+  }
+
+  const kanban = document.getElementById('tasks-kanban');
+  if(!kanban) return;
+  kanban.innerHTML = `
+    <div class="k-col">
+      <div class="k-col-header"><span class="k-col-title">未着手 / 進行中</span><span class="k-count">${notStarted.length}</span></div>
+      ${notStarted.map(cardHtml).join('')}
+    </div>
+    <div class="k-col">
+      <div class="k-col-header"><span class="k-col-title">期限超過</span><span class="k-count" style="color:var(--red)">${overdue.length}</span></div>
+      ${overdue.map(cardHtml).join('')}
+    </div>
+    <div class="k-col">
+      <div class="k-col-header"><span class="k-col-title">完了</span><span class="k-count">${doneList.length}</span></div>
+      ${doneList.map(cardHtml).join('')}
+    </div>`;
+}
+
+function quickDeleteTask(pid, tid){
+  const proj = PROJECTS.find(p=>p.id===pid);
+  if(!proj) return;
+  const task = proj.tasks.find(t=>t.id===tid);
+  if(!task) return;
+  if(!confirm(`「${task.title}」を削除しますか？`)) return;
+  proj.tasks = proj.tasks.filter(t=>t.id!==tid);
+  renderTasks();
+  renderProjects();
+}
+
+// ===== SETTINGS PAGE =====
+function renderSettings(){
+  const wrap = document.getElementById('settings-proj-list');
+  if(!wrap) return;
+  let html = '';
+  PROJECTS.forEach(proj=>{
+    const done = proj.tasks.filter(t=>t.done).length;
+    html += `<div class="settings-proj-row">
+      <span class="dot" style="background:${proj.color};width:10px;height:10px"></span>
+      <span style="flex:1;font-size:13px;font-weight:500">${proj.name}</span>
+      <span style="font-size:11px;color:var(--text3)">タスク ${proj.tasks.length} 件・完了 ${done}</span>
+      <button class="proj-del-btn" onclick="deleteProject('${proj.id}')">🗑 削除</button>
+    </div>`;
+  });
+  wrap.innerHTML = html || '<div style="font-size:13px;color:var(--text3)">プロジェクトがありません</div>';
+
+  // トグル同期
+  const tog = document.getElementById('toggle-done');
+  if(tog){
+    tog.checked = SHOW_DONE;
+    const track = document.getElementById('toggle-done-track');
+    const thumb = document.getElementById('toggle-done-thumb');
+    tog.onchange = ()=>{
+      SHOW_DONE = tog.checked;
+      track.style.background = SHOW_DONE ? '#185FA5' : '#ccc';
+      thumb.style.left = SHOW_DONE ? '18px' : '2px';
+      renderProjects();
+    };
+  }
+}
+
+function deleteProject(pid){
+  const proj = PROJECTS.find(p=>p.id===pid);
+  if(!proj) return;
+  if(!confirm(`プロジェクト「${proj.name}」とその全タスクを削除しますか？`)) return;
+  PROJECTS = PROJECTS.filter(p=>p.id!==pid);
+  renderProjects();
+  renderTasks();
+  renderSettings();
+  // サイドバーのプロジェクト一覧も更新
+  updateSidebarProjects();
+}
+
+function clearDoneTasks(){
+  PROJECTS.forEach(proj=>{ proj.tasks = proj.tasks.filter(t=>!t.done); });
+}
+
+function resetAll(){
+  PROJECTS = [];
+  renderProjects();
+  renderTasks();
+  renderSettings();
+  updateSidebarProjects();
+}
+
+function updateSidebarProjects(){
+  // サイドバーのプロジェクトショートカット（sb-p1〜）は静的でOK、設定ページで管理
+}
+
 // ===== INIT =====
 renderDay();
 renderWeek();
 renderMonth();
 renderProjects();
+renderTasks();
 </script>
 
 <!-- ===== DELETE CONFIRM MODAL ===== -->
