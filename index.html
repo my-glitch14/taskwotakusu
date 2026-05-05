@@ -1451,38 +1451,77 @@ function setTaskFilter(f){
 // ===== RENDER TASKS (kanban from PROJECTS data) =====
 function renderTasks(){
   const today = new Date(); today.setHours(0,0,0,0);
-  // 全タスクをフラット化
+
+  // 全タスクをフラット化（繰り返しタスクも含む）
   const all = [];
   PROJECTS.forEach(proj=>{
     proj.tasks.forEach(task=>{
-      if(task.repeat && task.repeat!=='none') return; // 繰り返しはここでは省略
-      all.push({...task, projName:proj.name, projColor:proj.color, projId:proj.id});
+      const dates = expandRepeats(task);
+      if(dates !== null){
+        // 繰り返しタスク：ウィンドウ内の各日を個別エントリとして展開
+        dates.forEach(ds=>{
+          const isOccDone = (task.doneOccurrences||[]).includes(ds);
+          all.push({
+            ...task,
+            _displayDue: ds,
+            _isOccDone: isOccDone,
+            _occDate: ds,
+            projName:proj.name, projColor:proj.color, projId:proj.id
+          });
+        });
+      } else {
+        // 通常タスク
+        all.push({
+          ...task,
+          _displayDue: task.due,
+          _isOccDone: false,
+          _occDate: null,
+          projName:proj.name, projColor:proj.color, projId:proj.id
+        });
+      }
     });
   });
 
-  const todo   = all.filter(t=>!t.done);
-  const done   = all.filter(t=>t.done);
+  // 完了判定
+  const isDone = t => t.repeat && t.repeat!=='none' ? t._isOccDone : t.done;
+
+  const todo = all.filter(t=>!isDone(t));
+  const done = all.filter(t=> isDone(t));
 
   let showTodo = (taskFilter==='all'||taskFilter==='todo') ? todo : [];
   let showDone = (taskFilter==='all'||taskFilter==='done') ? done : [];
 
-  // ステータスで3列に分類
-  const notStarted = showTodo.filter(t=>{ const d=t.due?new Date(t.due):null; return !d||d>=today; }).slice(0,10);
-  const overdue    = showTodo.filter(t=>{ const d=t.due?new Date(t.due):null; return d&&d<today; });
-  const doneList   = showDone.slice(0,10);
+  // 3列に分類（期限順ソート）
+  showTodo.sort((a,b)=>(a._displayDue||'9999')>(b._displayDue||'9999')?1:-1);
+  showDone.sort((a,b)=>(a._displayDue||'9999')>(b._displayDue||'9999')?1:-1);
 
+  const notStarted = showTodo.filter(t=>{ const d=t._displayDue?new Date(t._displayDue):null; return !d||d>=today; });
+  const overdue    = showTodo.filter(t=>{ const d=t._displayDue?new Date(t._displayDue):null; return d&&d<today; });
+  const doneList   = showDone.slice(0,15);
+
+  // ユニーク件数（繰り返しは1タスクとしてカウント）
+  const uniqueTasks = new Set(all.map(t=>t.id));
+  const uniqueTodo  = new Set(todo.map(t=>t.id));
+  const uniqueDone  = new Set(done.map(t=>t.id));
   const label = document.getElementById('task-count-label');
-  if(label) label.textContent = `合計 ${all.length} 件（未完了 ${todo.length}・完了 ${done.length}）`;
+  if(label) label.textContent = `合計 ${uniqueTasks.size} 件（未完了 ${uniqueTodo.size}・完了 ${uniqueDone.size}）`;
 
   function cardHtml(t){
-    const tDue = t.due ? new Date(t.due) : null;
-    const tDueStr = t.due ? t.due.slice(5).replace('-','/') : '';
-    const tOver = tDue && tDue < today && !t.done;
-    return `<div class="kcard${t.done?' done':''}">
-      <div class="kcard-title">${t.title}</div>
+    const due = t._displayDue;
+    const tDue = due ? new Date(due) : null;
+    const tDueStr = due ? due.slice(5).replace('-','/') : '';
+    const tOver = tDue && tDue < today && !isDone(t);
+    const isRepeat = t.repeat && t.repeat!=='none';
+    const repeatBadge = isRepeat
+      ? `<span class="repeat-badge ${t.repeat==='daily'?'daily':'weekly'}" style="font-size:10px">↻${t.repeat==='daily'?'毎日':'毎週'}</span>`
+      : '';
+    const doneCls = isDone(t) ? ' done' : '';
+    return `<div class="kcard${doneCls}">
+      <div class="kcard-title" style="${isDone(t)?'text-decoration:line-through;color:var(--text3)':''}">${t.title}</div>
       <div class="kcard-meta" style="margin-top:4px">
         <span class="prio prio-${t.prio}">${{high:'高',mid:'中',low:'低'}[t.prio]}</span>
         <span class="tag" style="background:${t.projColor}22;color:${t.projColor}">${t.projName}</span>
+        ${repeatBadge}
         ${tDueStr?`<span style="font-size:11px;color:${tOver?'var(--red)':'var(--text3)'}">${tOver?'⚠ ':''}${tDueStr}</span>`:''}
       </div>
       <button class="kcard-del" onclick="quickDeleteTask('${t.projId}','${t.id}')" title="削除">×</button>
