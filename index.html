@@ -164,6 +164,24 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .kcard:hover .kcard-del{opacity:1}
 .kcard-del:hover{color:var(--red);background:var(--red-bg)}
 
+
+/* ======= EDIT MODAL ======= */
+.edit-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:400;align-items:center;justify-content:center}
+.edit-modal-backdrop.open{display:flex}
+.edit-modal{background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:440px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.edit-modal-title{font-size:15px;font-weight:500;margin-bottom:6px}
+.edit-modal-sub{font-size:12px;color:var(--text2);margin-bottom:16px}
+.edit-scope-tabs{display:flex;gap:6px;margin-bottom:16px}
+.edit-scope-tab{flex:1;padding:7px;border-radius:var(--radius);border:1px solid var(--border);background:none;cursor:pointer;font-size:12px;text-align:center;color:var(--text2);transition:all .15s}
+.edit-scope-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* ======= REPEAT TASK COLLAPSIBLE ======= */
+.repeat-group-header{margin:8px 0 0;padding:6px 10px;border-left:3px solid var(--proj-color,#ccc);display:flex;align-items:center;gap:8px;cursor:pointer;border-radius:0 var(--radius) var(--radius) 0;transition:background .12s}
+.repeat-group-header:hover{background:var(--bg2)}
+.repeat-group-body{display:none;padding-bottom:4px}
+.repeat-group-body.open{display:block}
+.repeat-chevron{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0}
+.repeat-chevron.open{transform:rotate(90deg)}
+
 /* ======= REPEAT BADGE ======= */
 .repeat-badge{font-size:10px;padding:1px 6px;border-radius:8px;background:var(--blue-bg);color:var(--blue-text);white-space:nowrap;flex-shrink:0}
 .repeat-badge.daily{background:#EAF3DE;color:#27500A}
@@ -899,15 +917,20 @@ function renderProjects(){
         // ===== 繰り返しタスク：展開して各日を表示 =====
         const rLabel = task.repeat==='daily'?'毎日':'毎週';
         const rClass = task.repeat==='daily'?'daily':'weekly';
-        // 繰り返しグループヘッダー
+        // 繰り返しグループヘッダー（折りたたみ対応）
+        const rgId = 'rg-'+task.id;
+        const doneCount = repeatDates.filter(ds=>task.doneOccurrences&&task.doneOccurrences.includes(ds)).length;
         tasksHtml += `
-        <div style="margin:8px 0 4px;padding:4px 10px;border-left:3px solid ${proj.color};display:flex;align-items:center;gap:8px">
+        <div class="repeat-group-header" style="--proj-color:${proj.color}" onclick="toggleRepeatGroup('${rgId}')">
+          <span class="repeat-chevron" id="chev-${rgId}">▶</span>
           <span style="font-size:12px;font-weight:500;color:var(--text2)">${task.title}</span>
           <span class="repeat-badge ${rClass}">↻ ${rLabel}</span>
-          <button onclick="deleteTask('${proj.id}','${task.id}',null)" style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px" title="繰り返し全削除">全削除</button>
-        </div>`;
+          <span style="font-size:11px;color:var(--text3);margin-left:4px">${doneCount}/${repeatDates.length}完了</span>
+          <button onclick="event.stopPropagation();deleteTask('${proj.id}','${task.id}',null)" style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px" title="繰り返し全削除">全削除</button>
+        </div>
+        <div class="repeat-group-body" id="${rgId}">`;
         if(repeatDates.length===0){
-          tasksHtml += `<div style="font-size:11px;color:var(--text3);padding:4px 10px">（表示対象の日程なし）</div>`;
+          tasksHtml += `<div style="font-size:11px;color:var(--text3);padding:4px 20px">（表示対象の日程なし）</div>`;
         }
         repeatDates.forEach(ds=>{
           const dDate = new Date(ds); dDate.setHours(0,0,0,0);
@@ -916,7 +939,7 @@ function renderProjects(){
           const dDisp = ds.slice(5).replace('-','/');
           const dayLabel = ['日','月','火','水','木','金','土'][dDate.getDay()];
           tasksHtml += `
-          <div class="task-row" style="padding-left:20px" id="tr-${task.id}-${ds}">
+          <div class="task-row" style="padding-left:28px" id="tr-${task.id}-${ds}">
             <div class="checkbox${isOccDone?' checked':''}" onclick="toggleOccDone('${proj.id}','${task.id}','${ds}',this)">${isOccDone?'✓':''}</div>
             <div class="task-row-title${isOccDone?' done':''}" style="font-size:12px">${dDisp}（${dayLabel}）</div>
             <span class="prio prio-${task.prio}">${{high:'高',mid:'中',low:'低'}[task.prio]}</span>
@@ -924,6 +947,7 @@ function renderProjects(){
             <button onclick="deleteTask('${proj.id}','${task.id}','${ds}')" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;border-radius:4px;line-height:1" title="この日を削除">×</button>
           </div>`;
         });
+        tasksHtml += `</div>`;
       } else {
         // ===== 通常タスク =====
         const tDue = task.due ? new Date(task.due) : null;
@@ -984,6 +1008,14 @@ function toggleProj(pid){
   const chev = document.getElementById('chev-'+pid);
   const open = tree.classList.toggle('open');
   chev.classList.toggle('open', open);
+}
+
+function toggleRepeatGroup(rgId){
+  const body = document.getElementById(rgId);
+  const chev = document.getElementById('chev-'+rgId);
+  if(!body) return;
+  const open = body.classList.toggle('open');
+  if(chev) chev.classList.toggle('open', open);
 }
 
 function toggleProjTask(pid, tid, el){
@@ -1396,6 +1428,8 @@ function showEventPopup(e, evId, evSrc, dateStr){
   const acts = document.getElementById('evp-actions');
   if(evSrc==='rec'){
     acts.innerHTML = `
+      <button class="btn" style="font-size:12px;justify-content:flex-start"
+        onclick="openEditEvModal('rec','${evId}','${dateStr}')">✏️ 編集</button>
       <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
         onclick="deleteCalEvent('rec','${evId}','one','${dateStr}')">📅 この日のみ削除</button>
       <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
@@ -1404,6 +1438,8 @@ function showEventPopup(e, evId, evSrc, dateStr){
         onclick="deleteCalEvent('rec','${evId}','all','${dateStr}')">🗑 この定期イベントをすべて削除</button>`;
   } else {
     acts.innerHTML = `
+      <button class="btn" style="font-size:12px;justify-content:flex-start"
+        onclick="openEditEvModal('once','${evId}','${dateStr}')">✏️ 編集</button>
       <button class="btn" style="font-size:12px;justify-content:flex-start;color:var(--red);border-color:var(--red)"
         onclick="deleteCalEvent('once','${evId}','all','${dateStr}')">🗑 このイベントを削除</button>`;
   }
@@ -1420,6 +1456,106 @@ function showEventPopup(e, evId, evSrc, dateStr){
 function closeEventPopup(){
   document.getElementById('ev-popup').style.display = 'none';
   document.getElementById('ev-popup-mask').style.display = 'none';
+}
+
+// ===== EDIT EVENT MODAL =====
+let _editCtx = null; // {src, evId, dateStr, scope}
+
+function openEditEvModal(src, evId, dateStr){
+  closeEventPopup();
+  let ev = src==='rec' ? RECURRING.find(r=>r.id===evId) : ONCE.find(o=>o.id===evId);
+  if(!ev) return;
+
+  _editCtx = {src, evId, dateStr, scope: src==='rec' ? 'one' : 'all'};
+
+  document.getElementById('eem-title').textContent = src==='rec' ? '繰り返しイベントを編集' : 'イベントを編集';
+  document.getElementById('eem-sub').textContent   = src==='rec' ? '変更範囲を選択してください' : '';
+  // 繰り返しのときだけスコープタブ表示
+  document.getElementById('eem-scope-tabs').style.display = src==='rec' ? 'flex' : 'none';
+  // スコープタブをリセット
+  document.querySelectorAll('.edit-scope-tab').forEach((b,i)=>{
+    b.classList.toggle('active', i===0);
+  });
+  _editCtx.scope = src==='rec' ? 'one' : 'all';
+
+  document.getElementById('eem-ev-title').value = ev.title;
+  const toTime = h => String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0');
+  document.getElementById('eem-start').value = toTime(ev.start);
+  document.getElementById('eem-end').value   = toTime(ev.end);
+  document.getElementById('eem-cat').value   = ev.cat||'その他';
+
+  // 単発イベントは日付も編集可能、繰り返しはスコープ次第で日付非表示
+  const dateRow = document.getElementById('eem-date-row');
+  if(src==='once'){
+    document.getElementById('eem-date').value = ev.date||dateStr;
+    dateRow.style.display='grid';
+  } else {
+    dateRow.style.display = _editCtx.scope==='one' ? 'none' : 'grid';
+  }
+
+  document.getElementById('edit-ev-modal').classList.add('open');
+  document.getElementById('eem-ev-title').focus();
+}
+
+function setEditScope(scope, btn){
+  _editCtx.scope = scope;
+  document.querySelectorAll('.edit-scope-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // 全体編集のときは日付行を非表示（繰り返しは曜日固定）
+  const dateRow = document.getElementById('eem-date-row');
+  dateRow.style.display = scope==='one' ? 'none' : 'grid';
+}
+
+function closeEditEvModal(){
+  document.getElementById('edit-ev-modal').classList.remove('open');
+  _editCtx = null;
+}
+
+function saveEditEv(){
+  if(!_editCtx) return;
+  const {src, evId, dateStr, scope} = _editCtx;
+  const newTitle = document.getElementById('eem-ev-title').value.trim();
+  const newCat   = document.getElementById('eem-cat').value;
+  const toH = s=>{ const [h,m]=s.split(':'); return parseInt(h)+parseInt(m)/60; };
+  const newStart = toH(document.getElementById('eem-start').value);
+  const newEnd   = toH(document.getElementById('eem-end').value);
+  if(!newTitle){ alert('イベント名を入力してください'); return; }
+  if(newEnd <= newStart){ alert('終了時刻は開始時刻より後にしてください'); return; }
+
+  if(src==='rec'){
+    const ev = RECURRING.find(r=>r.id===evId);
+    if(!ev){ closeEditEvModal(); return; }
+
+    if(scope==='all'){
+      // 全体を更新
+      ev.title = newTitle;
+      ev.start = newStart;
+      ev.end   = newEnd;
+      ev.cat   = newCat;
+    } else {
+      // この日のみ: ONCEに単発イベントとして追加し、元はskip
+      if(!ev.skipDates) ev.skipDates=[];
+      if(!ev.skipDates.includes(dateStr)) ev.skipDates.push(dateStr);
+      ONCE.push({
+        id:'o'+Date.now(), date:dateStr,
+        start:newStart, end:newEnd,
+        title:newTitle, cat:newCat, isRec:false
+      });
+    }
+  } else {
+    const ev = ONCE.find(o=>o.id===evId);
+    if(!ev){ closeEditEvModal(); return; }
+    const newDate = document.getElementById('eem-date').value;
+    ev.title = newTitle;
+    ev.start = newStart;
+    ev.end   = newEnd;
+    ev.cat   = newCat;
+    if(newDate) ev.date = newDate;
+  }
+
+  closeEditEvModal();
+  refreshCalView();
+  if(curPage==='settings') renderSettings();
 }
 
 function deleteCalEvent(src, evId, mode, dateStr){
@@ -1493,6 +1629,48 @@ renderTasks();
   <div id="evp-actions" style="display:flex;flex-direction:column;gap:6px"></div>
 </div>
 <div id="ev-popup-mask" style="display:none;position:fixed;inset:0;z-index:299" onclick="closeEventPopup()"></div>
+
+<!-- ===== EDIT EVENT MODAL ===== -->
+<div class="edit-modal-backdrop" id="edit-ev-modal">
+  <div class="edit-modal" onclick="event.stopPropagation()">
+    <div class="edit-modal-title" id="eem-title">イベントを編集</div>
+    <div class="edit-modal-sub" id="eem-sub"></div>
+    <div class="edit-scope-tabs" id="eem-scope-tabs" style="display:none">
+      <button class="edit-scope-tab active" onclick="setEditScope('one',this)">この日のみ変更</button>
+      <button class="edit-scope-tab" onclick="setEditScope('all',this)">すべて変更</button>
+    </div>
+    <div class="form-row">
+      <label class="form-label">イベント名</label>
+      <input class="form-input" id="eem-ev-title" type="text">
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">開始時刻</label>
+        <input class="form-input" id="eem-start" type="time">
+      </div>
+      <div>
+        <label class="form-label">終了時刻</label>
+        <input class="form-input" id="eem-end" type="time">
+      </div>
+    </div>
+    <div class="form-row-2" id="eem-date-row">
+      <div>
+        <label class="form-label">日付</label>
+        <input class="form-input" id="eem-date" type="date">
+      </div>
+      <div>
+        <label class="form-label">カテゴリ</label>
+        <select class="form-input" id="eem-cat">
+          <option>講義</option><option>研究</option><option>締切</option><option>発表</option><option>その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditEvModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEditEv()">保存</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== DELETE CONFIRM MODAL ===== -->
 <div class="del-modal-backdrop" id="del-modal">
