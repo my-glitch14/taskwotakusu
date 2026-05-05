@@ -1402,13 +1402,16 @@ function renderSidebarProjects(){
     html += '<div style="font-size:11px;color:var(--text3);padding:4px 10px">なし</div>';
   } else {
     PROJECTS.forEach(proj=>{
-      html += `<div class="nav-item" data-page="projects" onclick="navToPage('projects',this)">
+      html += `<div class="nav-item sb-proj-link" data-page="projects" style="cursor:pointer">
         <span class="dot" style="background:${proj.color}"></span>${proj.name}
       </div>`;
     });
   }
   wrap.innerHTML = html;
-  // クリックイベントを再アタッチ（動的に生成したのでdelegationで対応済み）
+  // 動的生成後にイベントを再アタッチ
+  wrap.querySelectorAll('.sb-proj-link').forEach(el=>{
+    el.addEventListener('click', ()=> navToPage('projects', el));
+  });
 }
 
 // ===== TASK FILTER STATE =====
