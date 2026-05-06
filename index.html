@@ -1340,97 +1340,96 @@ function openAddTaskModal(pid){
 function renderDashboard(){
   const wrap = document.getElementById('dashboard-wrap');
   if(!wrap) return;
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today    = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+  const dayAfter = new Date(today); dayAfter.setDate(today.getDate()+2);
 
-  // 期限が今日・明日のタスクをアラート表示（繰り返し含む）
-  const urgentItems = []; // {title, projName, dateStr, isOverdue}
+  // 全未完了タスクをフラット化（繰り返し含む）
+  const allTasks = [];
   PROJECTS.forEach(proj=>{
     proj.tasks.forEach(t=>{
       const dates = expandRepeats(t);
       if(dates !== null){
-        // 繰り返しタスク：今日・明日に該当する日付を探す
         dates.forEach(ds=>{
-          const d = new Date(ds);
           const isDone = (t.doneOccurrences||[]).includes(ds);
-          if(!isDone && d <= tomorrow){
-            urgentItems.push({title:t.title, projName:proj.name, dateStr:ds, isOverdue:d<today});
-          }
-        });
-      } else {
-        // 通常タスク
-        if(!t.done && t.due){
-          const d = new Date(t.due);
-          if(d <= tomorrow) urgentItems.push({title:t.title, projName:proj.name, dateStr:t.due, isOverdue:d<today});
-        }
-      }
-    });
-  });
-
-  let alertHtml = '';
-  urgentItems.forEach(item=>{
-    const label = item.isOverdue ? '期限超過' : new Date(item.dateStr).getTime()===today.getTime() ? '今日締切' : '明日締切';
-    alertHtml += `<div class="alert-bar" style="${item.isOverdue?'background:var(--red-bg);border-color:var(--red);color:var(--red)':''}">
-      ${item.isOverdue?'🚨':'⚠'} 「${item.title}」の期限が${label}です
-      <span style="margin-left:auto;font-size:11px;opacity:.7">${item.projName}</span>
-    </div>`;
-  });
-  if(!alertHtml && PROJECTS.length===0){
-    alertHtml = '<div style="font-size:13px;color:var(--text3);padding:12px 0">プロジェクトがありません。「＋ 新規」から作成してください。</div>';
-  }
-
-  // 直近タスク一覧（通常＋繰り返し、未完了、期限順、最大5件）
-  const upcoming = [];
-  PROJECTS.forEach(proj=>{
-    proj.tasks.forEach(t=>{
-      const dates = expandRepeats(t);
-      if(dates !== null){
-        // 繰り返し：直近の未完了日を1件だけ代表として追加
-        const nextDate = dates.find(ds=>!(t.doneOccurrences||[]).includes(ds));
-        if(nextDate){
-          upcoming.push({
-            id:t.id, title:t.title, prio:t.prio, due:nextDate,
-            done:false, repeat:t.repeat, isRepeat:true,
+          if(!isDone) allTasks.push({
+            id:t.id, title:t.title, prio:t.prio, due:ds,
+            repeat:t.repeat, isRepeat:true, occDate:ds,
             projName:proj.name, projColor:proj.color, projId:proj.id
           });
-        }
+        });
       } else {
-        if(!t.done) upcoming.push({...t, isRepeat:false, projName:proj.name, projColor:proj.color, projId:proj.id});
+        if(!t.done) allTasks.push({
+          ...t, isRepeat:false, occDate:null,
+          projName:proj.name, projColor:proj.color, projId:proj.id
+        });
       }
     });
   });
-  upcoming.sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1);
-  const showTasks = upcoming.slice(0, 5);
+  allTasks.sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1);
 
-  let taskHtml = '';
-  showTasks.forEach(t=>{
-    const tDue = t.due ? new Date(t.due) : null;
+  const todayStr    = fmtDate(today);
+  const tomorrowStr = fmtDate(tomorrow);
+  const dayAfterStr = fmtDate(dayAfter);
+
+  const overdueTasks  = allTasks.filter(t=> t.due && t.due <  todayStr);
+  const todayTasks    = allTasks.filter(t=> t.due === todayStr);
+  const soonTasks     = allTasks.filter(t=> t.due === tomorrowStr || t.due === dayAfterStr);
+
+  // タスクカードHTML生成
+  function taskCardHtml(t){
     const tDueStr = t.due ? t.due.slice(5).replace('-','/') : '';
-    const isOver = tDue && tDue < today;
-    const isTmr  = tDue && tDue.getTime()===tomorrow.getTime();
-    const repeatLabel = t.isRepeat ? `<span class="repeat-badge ${t.repeat==='daily'?'daily':'weekly'}" style="font-size:10px">↻ ${t.repeat==='daily'?'毎日':'毎週'}</span>` : '';
-    taskHtml += `<div class="task-card">
+    const isOver  = t.due && t.due < todayStr;
+    const repeatLabel = t.isRepeat
+      ? `<span class="repeat-badge ${t.repeat==='daily'?'daily':'weekly'}" style="font-size:10px">↻ ${t.repeat==='daily'?'毎日':'毎週'}</span>`
+      : '';
+    const occArg = t.isRepeat ? t.occDate : '';
+    return `<div class="task-card">
       <div class="task-header">
-        <div class="checkbox${t.done?' checked':''}" onclick="dashToggleTask('${t.projId}','${t.id}','${t.isRepeat?t.due:''}',this)">${t.done?'✓':''}</div>
+        <div class="checkbox" onclick="dashToggleTask('${t.projId}','${t.id}','${occArg}',this)"></div>
         <div class="task-title">${t.title}</div>
         ${repeatLabel}
         <span class="prio prio-${t.prio}">${{high:'高',mid:'中',low:'低'}[t.prio]}</span>
       </div>
       <div class="task-meta">
         <span class="tag" style="background:${t.projColor}22;color:${t.projColor}">${t.projName}</span>
-        ${tDueStr?`<span class="${isOver?'overdue':''}">${isOver?'⚠ ':isTmr?'明日締切 ':''}${tDueStr}</span>`:''}
+        ${tDueStr?`<span style="font-size:11px;color:${isOver?'var(--red)':'var(--text3)'}">${isOver?'⚠ ':''}${tDueStr}</span>`:''}
       </div>
     </div>`;
-  });
-  if(!taskHtml) taskHtml = '<div style="font-size:13px;color:var(--text3);padding:8px 0">未完了タスクはありません</div>';
+  }
+
+  // セクションHTML生成
+  function sectionHtml(icon, label, tasks, color){
+    const count = tasks.length;
+    const badge = count > 0
+      ? `<span style="font-size:11px;background:${color}22;color:${color};padding:2px 8px;border-radius:10px;margin-left:6px">${count}</span>`
+      : `<span style="font-size:11px;color:var(--text3);margin-left:6px">0</span>`;
+    const body  = count > 0
+      ? tasks.map(taskCardHtml).join('')
+      : `<div style="font-size:12px;color:var(--text3);padding:6px 2px">なし</div>`;
+    return `<div style="margin-bottom:20px">
+      <div class="section-title" style="display:flex;align-items:center;margin-bottom:8px">
+        <span>${icon} ${label}</span>${badge}
+      </div>
+      ${body}
+    </div>`;
+  }
 
   // プロジェクト進捗
   let projHtml = '';
   PROJECTS.forEach(proj=>{
     const p = pct(proj);
     const dueStr = proj.due ? proj.due.slice(5).replace('-','/') : '';
-    const remain = proj.tasks.filter(t=>!t.done && t.repeat==='none').length;
-    projHtml += `<div class="proj-row" style="cursor:pointer" onclick="document.querySelector('[data-page=projects]').click()">
+    const {total, remain} = (()=>{
+      let tot=0,rem=0;
+      proj.tasks.forEach(t=>{
+        const d=expandRepeats(t);
+        if(d!==null){tot+=d.length;rem+=d.filter(ds=>!(t.doneOccurrences||[]).includes(ds)).length;}
+        else{tot+=1;if(!t.done)rem+=1;}
+      });
+      return {total:tot,remain:rem};
+    })();
+    projHtml += `<div class="proj-row" style="cursor:pointer" onclick="jumpToProject('${proj.id}')">
       <div class="proj-header">
         <span class="dot" style="background:${proj.color};width:10px;height:10px"></span>
         <span class="proj-name">${proj.name}</span>
@@ -1438,19 +1437,23 @@ function renderDashboard(){
       </div>
       <div class="prog-track"><div class="prog-fill" style="width:${p}%;background:${proj.color}"></div></div>
       <div class="proj-meta">
-        <span>残 ${remain}タスク</span>
+        <span>残 ${remain} / ${total} タスク</span>
         ${dueStr?`<span>締切 ${dueStr}</span>`:''}
       </div>
     </div>`;
   });
-  if(!projHtml) projHtml = '<div style="font-size:13px;color:var(--text3)">プロジェクトがありません</div>';
+  if(!projHtml){
+    projHtml = PROJECTS.length===0
+      ? '<div style="font-size:13px;color:var(--text3)">プロジェクトがありません。「＋ 新規」から作成してください。</div>'
+      : '<div style="font-size:13px;color:var(--text3)">なし</div>';
+  }
 
-  wrap.innerHTML = `
-    ${alertHtml}
-    <div class="section-title">直近のタスク（期限順）</div>
-    ${taskHtml}
-    <div style="margin-top:20px" class="section-title">プロジェクト進捗</div>
-    ${projHtml}`;
+  wrap.innerHTML =
+    sectionHtml('🚨', '期限超過', overdueTasks, 'var(--red)') +
+    sectionHtml('📅', '本日のタスク', todayTasks, 'var(--blue)') +
+    sectionHtml('📆', '明日・明後日のタスク', soonTasks, 'var(--amber)') +
+    `<div style="margin-top:4px" class="section-title">プロジェクト進捗</div>
+     <div style="margin-top:8px">${projHtml}</div>`;
 }
 
 function dashToggleTask(pid, tid, occDate, el){
